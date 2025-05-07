@@ -5,10 +5,12 @@
 
 pub mod arith;
 pub mod client;
-mod random;
-mod report;
-mod schema;
+pub mod dp;
+pub mod random;
+pub mod report;
+pub mod schema;
 pub mod server;
+pub mod shuffle;
 
 pub use random::hist_noise;
 pub use report::report::Report;
