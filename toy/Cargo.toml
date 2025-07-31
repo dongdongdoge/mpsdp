@@ -1,0 +1,33 @@
+[package]
+name = "toy-prototype"
+version = "0.1.0"
+edition = "2021"
+authors = ["Doppio Team"]
+description = "Minimal 3-server multi-party shuffle DP protocol prototype"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+rand = "0.8"
+tokio = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[example]]
+name = "basic_protocol"
+path = "examples/basic_protocol.rs"
+
+[[example]]
+name = "performance_test"
+path = "examples/performance_test.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0
+debug = true 

@@ -28,9 +28,9 @@ Doppio is designed as a modular framework for privacy-preserving data processing
 
 The system implements multiple layers of privacy protection:
 
-1. **Local Privacy (Client-side)**
+1. **Shuffle Privacy (Client-side)**
    - Data shuffling
-   - Local differential privacy
+   - Shuffle differential privacy
    - Input validation
 
 2. **Global Privacy (Server-side)**
@@ -58,13 +58,13 @@ The system implements multiple layers of privacy protection:
 ### 1. Client Module
 
 The client module is responsible for:
-- Data submission with local privacy guarantees
+- Data submission with shuffle privacy guarantees
 - Query execution with privacy budget management
-- Local data processing and validation
+- Shuffle data processing and validation
 
 Key components:
-- `Shuffler`: Implements local data shuffling
-- `DPMechanism`: Applies local differential privacy
+- `Shuffler`: Implements shuffle data shuffling
+- `DPMechanism`: Applies shuffle differential privacy
 - `Query`: Handles query construction and execution
 
 ### 2. Server Module
@@ -107,7 +107,7 @@ Key components:
 
 ### 1. Privacy Guarantees
 
-- Local differential privacy at the client
+- Shuffle differential privacy at the client
 - Global differential privacy at the server
 - Composition of privacy mechanisms
 - Privacy budget management

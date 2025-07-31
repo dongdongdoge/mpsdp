@@ -6,6 +6,7 @@
 pub mod arith;
 pub mod client;
 pub mod dp;
+pub mod multi_party;
 pub mod random;
 pub mod report;
 pub mod schema;

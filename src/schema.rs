@@ -836,6 +836,251 @@ pub fn attr_index_from_attr_name(schema: &Schema, attr_name: &str) -> Result<usi
         .ok_or(format!("Attribute name {} is invalid.", attr_name))
 }
 
+// Query-related types for shuffle differential privacy
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueryType {
+    Mean,
+    Variance,
+    Histogram,
+    Range,
+    Count,
+    Sum,
+}
+
+/// Represents a data point with features
+#[derive(Debug, Clone)]
+pub struct DataPoint {
+    features: Vec<f64>,
+    attributes: Vec<Attribute>,
+}
+
+impl DataPoint {
+    /// Create a new data point with features
+    pub fn new(features: Vec<f64>) -> Self {
+        Self {
+            features,
+            attributes: Vec::new(),
+        }
+    }
+
+    /// Create a new data point with features and attributes
+    pub fn with_attributes(features: Vec<f64>, attributes: Vec<Attribute>) -> Self {
+        Self {
+            features,
+            attributes,
+        }
+    }
+
+    /// Get the features
+    pub fn features(&self) -> &[f64] {
+        &self.features
+    }
+
+    /// Get mutable access to features
+    pub fn features_mut(&mut self) -> &mut [f64] {
+        &mut self.features
+    }
+
+    /// Get the attributes
+    pub fn attributes(&self) -> &[Attribute] {
+        &self.attributes
+    }
+
+    /// Get a specific feature value by name
+    pub fn get_feature(&self, feature_name: &str) -> Option<f64> {
+        // For now, we'll use a simple mapping based on feature name
+        // In a real implementation, this would use a proper schema mapping
+        match feature_name {
+            "feature1" => self.features.get(0).copied(),
+            "feature2" => self.features.get(1).copied(),
+            "feature3" => self.features.get(2).copied(),
+            _ => None,
+        }
+    }
+
+    /// Set a feature value by name
+    pub fn set_feature(&mut self, feature_name: &str, value: f64) -> Result<(), String> {
+        match feature_name {
+            "feature1" => {
+                if self.features.len() > 0 {
+                    self.features[0] = value;
+                    Ok(())
+                } else {
+                    Err("Feature index out of bounds".to_string())
+                }
+            }
+            "feature2" => {
+                if self.features.len() > 1 {
+                    self.features[1] = value;
+                    Ok(())
+                } else {
+                    Err("Feature index out of bounds".to_string())
+                }
+            }
+            "feature3" => {
+                if self.features.len() > 2 {
+                    self.features[2] = value;
+                    Ok(())
+                } else {
+                    Err("Feature index out of bounds".to_string())
+                }
+            }
+            _ => Err(format!("Unknown feature: {}", feature_name)),
+        }
+    }
+}
+
+/// Represents a query to be executed
+#[derive(Debug, Clone)]
+pub struct Query {
+    pub query_type: QueryType,
+    pub features: Vec<String>,
+    pub parameters: std::collections::HashMap<String, f64>,
+}
+
+impl Query {
+    /// Create a new query
+    pub fn new(query_type: QueryType, features: Vec<String>) -> Self {
+        Self {
+            query_type,
+            features,
+            parameters: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Create a new query with parameters
+    pub fn with_parameters(
+        query_type: QueryType,
+        features: Vec<String>,
+        parameters: std::collections::HashMap<String, f64>,
+    ) -> Self {
+        Self {
+            query_type,
+            features,
+            parameters,
+        }
+    }
+
+    /// Add a parameter to the query
+    pub fn add_parameter(&mut self, key: impl Into<String>, value: f64) {
+        self.parameters.insert(key.into(), value);
+    }
+
+    /// Get a parameter value
+    pub fn get_parameter(&self, key: &str) -> Option<f64> {
+        self.parameters.get(key).copied()
+    }
+}
+
+/// Represents the result of a query execution
+#[derive(Debug, Clone)]
+pub struct QueryResult {
+    values: Vec<f64>,
+    has_noise: bool,
+    privacy_budget_used: f64,
+}
+
+impl QueryResult {
+    /// Create a new query result
+    pub fn new(values: Vec<f64>) -> Self {
+        Self {
+            values,
+            has_noise: false,
+            privacy_budget_used: 0.0,
+        }
+    }
+
+    /// Create a new query result with noise
+    pub fn with_noise(values: Vec<f64>, privacy_budget_used: f64) -> Self {
+        Self {
+            values,
+            has_noise: true,
+            privacy_budget_used,
+        }
+    }
+
+    /// Get the result values
+    pub fn values(&self) -> &[f64] {
+        &self.values
+    }
+
+    /// Get mutable access to the values
+    pub fn values_mut(&mut self) -> &mut [f64] {
+        &mut self.values
+    }
+
+    /// Check if the result has noise added
+    pub fn has_noise(&self) -> bool {
+        self.has_noise
+    }
+
+    /// Get the privacy budget used
+    pub fn privacy_budget_used(&self) -> f64 {
+        self.privacy_budget_used
+    }
+
+    /// Set the privacy budget used
+    pub fn set_privacy_budget_used(&mut self, budget: f64) {
+        self.privacy_budget_used = budget;
+    }
+
+    /// Mark the result as having noise
+    pub fn mark_as_noisy(&mut self) {
+        self.has_noise = true;
+    }
+}
+
+#[cfg(test)]
+mod query_tests {
+    use super::*;
+
+    #[test]
+    fn test_data_point_creation() {
+        let data = DataPoint::new(vec![1.0, 2.0, 3.0]);
+        assert_eq!(data.features(), &[1.0, 2.0, 3.0]);
+        assert_eq!(data.get_feature("feature1"), Some(1.0));
+        assert_eq!(data.get_feature("feature2"), Some(2.0));
+        assert_eq!(data.get_feature("feature3"), Some(3.0));
+    }
+
+    #[test]
+    fn test_data_point_feature_setting() {
+        let mut data = DataPoint::new(vec![1.0, 2.0, 3.0]);
+        assert!(data.set_feature("feature1", 5.0).is_ok());
+        assert_eq!(data.get_feature("feature1"), Some(5.0));
+        assert!(data.set_feature("unknown", 1.0).is_err());
+    }
+
+    #[test]
+    fn test_query_creation() {
+        let query = Query::new(
+            QueryType::Mean,
+            vec!["feature1".to_string(), "feature2".to_string()],
+        );
+        assert_eq!(query.query_type, QueryType::Mean);
+        assert_eq!(query.features.len(), 2);
+    }
+
+    #[test]
+    fn test_query_with_parameters() {
+        let mut query = Query::new(QueryType::Histogram, vec!["feature1".to_string()]);
+        query.add_parameter("bins", 10.0);
+        assert_eq!(query.get_parameter("bins"), Some(10.0));
+        assert_eq!(query.get_parameter("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_query_result() {
+        let result = QueryResult::new(vec![1.0, 2.0, 3.0]);
+        assert_eq!(result.values(), &[1.0, 2.0, 3.0]);
+        assert!(!result.has_noise());
+
+        let noisy_result = QueryResult::with_noise(vec![1.0, 2.0], 0.5);
+        assert!(noisy_result.has_noise());
+        assert_eq!(noisy_result.privacy_budget_used(), 0.5);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

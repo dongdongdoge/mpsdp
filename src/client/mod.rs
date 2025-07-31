@@ -34,7 +34,7 @@ impl Client {
     }
 
     pub fn submit_data(&mut self, data: DataPoint) -> Result<(), ClientError> {
-        // Apply local privacy guarantees
+        // Apply shuffle privacy guarantees
         let mut data_vec = vec![data];
         self.shuffler.shuffle_data(data_vec)?;
         Ok(())
