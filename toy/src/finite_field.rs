@@ -56,12 +56,8 @@ impl FieldElement {
             return Err(FieldError::ModulusMismatch);
         }
 
-        let sum = self.value + other.value;
-        let result = if sum >= self.modulus {
-            sum - self.modulus
-        } else {
-            sum
-        };
+        let sum = (self.value as u128) + (other.value as u128);
+        let result = (sum % (self.modulus as u128)) as u64;
 
         Ok(FieldElement::new(result, self.modulus))
     }
@@ -223,15 +219,13 @@ impl FiniteField {
         if n < 2 {
             return false;
         }
-        if n == 2 {
-            return true;
-        }
         if n % 2 == 0 {
-            return false;
+            return n == 2;
         }
 
-        let mut i = 3;
-        while i * i <= n {
+        let mut i: u64 = 3;
+        // Use division-based bound to avoid overflow of i*i
+        while i <= n / i {
             if n % i == 0 {
                 return false;
             }

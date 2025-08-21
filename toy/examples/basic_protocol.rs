@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Key features demonstrated:");
     println!("  ✓ Zero communication in online phase");
     println!("  ✓ All computations in finite fields");
-    println!("  ✓ Secret sharing with 2-out-of-3 threshold");
+    println!("  ✓ Additive secret sharing (2 shares, modular arithmetic)");
     println!("  ✓ Differential privacy with Laplace noise");
     println!("  ✓ Complete privacy preservation");
 

@@ -35,172 +35,91 @@ impl SecretShare {
     }
 }
 
-/// Shamir's secret sharing implementation
+/// Additive secret sharing implementation (2-out-of-2)
 #[derive(Clone)]
-pub struct ShamirSecretSharing {
-    /// Threshold (minimum shares needed)
-    pub threshold: usize,
-    /// Number of shares
-    pub num_shares: usize,
+pub struct AdditiveSecretSharing {
     /// Finite field
     pub field: FiniteField,
 }
 
-impl ShamirSecretSharing {
-    /// Create a new Shamir secret sharing scheme
-    pub fn new(threshold: usize, num_shares: usize, modulus: u64) -> Result<Self, FieldError> {
-        if threshold > num_shares {
-            return Err(FieldError::DimensionMismatch);
-        }
-
-        if threshold < 2 {
-            return Err(FieldError::DimensionMismatch);
-        }
-
+impl AdditiveSecretSharing {
+    /// Create a new additive secret sharing scheme (2 shares)
+    pub fn new(modulus: u64) -> Result<Self, FieldError> {
         let field = FiniteField::new(modulus)?;
-
-        Ok(Self {
-            threshold,
-            num_shares,
-            field,
-        })
+        Ok(Self { field })
     }
 
-    /// Share a secret value
+    /// Share a secret value into two additive shares (s = s0 + s1 mod p)
     pub fn share_secret(&self, secret: FieldElement) -> Result<Vec<SecretShare>, FieldError> {
         if secret.modulus() != self.field.modulus() {
             return Err(FieldError::ModulusMismatch);
         }
 
-        // Generate random coefficients for polynomial
-        let mut coefficients = Vec::with_capacity(self.threshold);
-        coefficients.push(secret); // Constant term is the secret
+        let s0 = self.field.random_element();
+        let s1 = secret.sub(&s0)?;
+        let p0 = self.field.zero();
+        let p1 = self.field.zero();
 
-        // Generate random coefficients for higher degree terms
-        for _ in 1..self.threshold {
-            coefficients.push(self.field.random_element());
-        }
-
-        // Generate shares by evaluating polynomial at different points
-        let mut shares = Vec::with_capacity(self.num_shares);
-        for i in 0..self.num_shares {
-            let point = self.field.element((i + 1) as u64);
-            let value = self.evaluate_polynomial(&coefficients, &point)?;
-            shares.push(SecretShare::new(i, value, point));
-        }
-
-        Ok(shares)
+        Ok(vec![
+            SecretShare::new(0, s0, p0),
+            SecretShare::new(1, s1, p1),
+        ])
     }
 
-    /// Reconstruct secret from shares
+    /// Reconstruct secret from two additive shares
     pub fn reconstruct_secret(&self, shares: &[SecretShare]) -> Result<FieldElement, FieldError> {
-        if shares.len() < self.threshold {
+        if shares.len() < 2 {
             return Err(FieldError::DimensionMismatch);
         }
-
-        // Use Lagrange interpolation to reconstruct the secret
-        let mut secret = self.field.zero();
-        let n = shares.len() as u64;
-
-        for (i, share) in shares.iter().enumerate() {
-            let mut numerator = self.field.one();
-            let mut denominator = self.field.one();
-
-            for (j, other_share) in shares.iter().enumerate() {
-                if i != j {
-                    // numerator *= (n - j)
-                    let n_minus_j = self.field.element(n - (j as u64 + 1));
-                    numerator = numerator.mul(&n_minus_j)?;
-
-                    // denominator *= (i - j)
-                    let i_minus_j = self.field.element((i as u64 + 1) - (j as u64 + 1));
-                    denominator = denominator.mul(&i_minus_j)?;
-                }
-            }
-
-            // Compute Lagrange coefficient
-            let lagrange_coeff = numerator.div(&denominator)?;
-            
-            // Add contribution to secret
-            let contribution = share.value().mul(&lagrange_coeff)?;
-            secret = secret.add(&contribution)?;
-        }
-
-        Ok(secret)
-    }
-
-    /// Evaluate polynomial at a given point
-    fn evaluate_polynomial(&self, coefficients: &[FieldElement], point: &FieldElement) -> Result<FieldElement, FieldError> {
-        if coefficients.is_empty() {
-            return Err(FieldError::EmptyInput);
-        }
-
-        let mut result = coefficients[0]; // Constant term
-        let mut power = self.field.one();
-
-        for coefficient in coefficients.iter().skip(1) {
-            power = power.mul(point)?;
-            let term = coefficient.mul(&power)?;
-            result = result.add(&term)?;
-        }
-
-        Ok(result)
+        let sum = shares[0].value().add(&shares[1].value())?;
+        Ok(sum)
     }
 
     /// Share a vector of secrets
     pub fn share_vector(&self, secrets: &[FieldElement]) -> Result<Vec<Vec<SecretShare>>, FieldError> {
         let mut all_shares = Vec::with_capacity(secrets.len());
-
         for secret in secrets {
             let shares = self.share_secret(*secret)?;
             all_shares.push(shares);
         }
-
         Ok(all_shares)
     }
 
     /// Reconstruct a vector of secrets
     pub fn reconstruct_vector(&self, shares: &[Vec<SecretShare>]) -> Result<Vec<FieldElement>, FieldError> {
         let mut secrets = Vec::with_capacity(shares.len());
-
         for share_group in shares {
             let secret = self.reconstruct_secret(share_group)?;
             secrets.push(secret);
         }
-
         Ok(secrets)
     }
 
     /// Share a matrix of secrets
     pub fn share_matrix(&self, matrix: &[Vec<FieldElement>]) -> Result<Vec<Vec<Vec<SecretShare>>>, FieldError> {
         let mut all_shares = Vec::with_capacity(matrix.len());
-
         for row in matrix {
             let row_shares = self.share_vector(row)?;
             all_shares.push(row_shares);
         }
-
         Ok(all_shares)
     }
 
     /// Reconstruct a matrix of secrets
     pub fn reconstruct_matrix(&self, shares: &[Vec<Vec<SecretShare>>]) -> Result<Vec<Vec<FieldElement>>, FieldError> {
         let mut matrix = Vec::with_capacity(shares.len());
-
         for row_shares in shares {
             let row = self.reconstruct_vector(row_shares)?;
             matrix.push(row);
         }
-
         Ok(matrix)
     }
 
-    /// Add two shared values
+    /// Add two shared values (element-wise, preserving ids)
     pub fn add_shares(&self, a: &[SecretShare], b: &[SecretShare]) -> Result<Vec<SecretShare>, FieldError> {
         if a.len() != b.len() {
             return Err(FieldError::DimensionMismatch);
         }
-
         let mut result = Vec::with_capacity(a.len());
         for (share_a, share_b) in a.iter().zip(b.iter()) {
             if share_a.id() != share_b.id() {
@@ -209,7 +128,6 @@ impl ShamirSecretSharing {
             let sum = share_a.value().add(&share_b.value())?;
             result.push(SecretShare::new(share_a.id(), sum, share_a.point()));
         }
-
         Ok(result)
     }
 
@@ -220,18 +138,7 @@ impl ShamirSecretSharing {
             let product = share.value().mul(&constant)?;
             result.push(SecretShare::new(share.id(), product, share.point()));
         }
-
         Ok(result)
-    }
-
-    /// Get threshold
-    pub fn threshold(&self) -> usize {
-        self.threshold
-    }
-
-    /// Get number of shares
-    pub fn num_shares(&self) -> usize {
-        self.num_shares
     }
 
     /// Get field
@@ -243,15 +150,15 @@ impl ShamirSecretSharing {
 /// Share distribution for multiple servers
 pub struct ShareDistributor {
     /// Secret sharing scheme
-    pub shamir: ShamirSecretSharing,
+    pub additive: AdditiveSecretSharing,
     /// Number of servers
     pub num_servers: usize,
 }
 
 impl ShareDistributor {
     /// Create a new share distributor
-    pub fn new(shamir: ShamirSecretSharing, num_servers: usize) -> Self {
-        Self { shamir, num_servers }
+    pub fn new(additive: AdditiveSecretSharing, num_servers: usize) -> Self {
+        Self { additive, num_servers }
     }
 
     /// Distribute shares among servers
@@ -294,29 +201,29 @@ mod tests {
 
     #[test]
     fn test_shamir_secret_sharing() {
-        let shamir = ShamirSecretSharing::new(2, 3, 7).unwrap();
+        let additive = AdditiveSecretSharing::new(7).unwrap();
         let secret = FieldElement::new(5, 7);
         
-        let shares = shamir.share_secret(secret).unwrap();
-        assert_eq!(shares.len(), 3);
+        let shares = additive.share_secret(secret).unwrap();
+        assert_eq!(shares.len(), 2);
         
-        let reconstructed = shamir.reconstruct_secret(&shares[0..2]).unwrap();
+        let reconstructed = additive.reconstruct_secret(&shares[0..2]).unwrap();
         assert_eq!(reconstructed.value(), secret.value());
     }
 
     #[test]
     fn test_vector_sharing() {
-        let shamir = ShamirSecretSharing::new(2, 3, 7).unwrap();
+        let additive = AdditiveSecretSharing::new(7).unwrap();
         let secrets = vec![
             FieldElement::new(1, 7),
             FieldElement::new(2, 7),
             FieldElement::new(3, 7),
         ];
         
-        let shares = shamir.share_vector(&secrets).unwrap();
+        let shares = additive.share_vector(&secrets).unwrap();
         assert_eq!(shares.len(), 3);
         
-        let reconstructed = shamir.reconstruct_vector(&shares).unwrap();
+        let reconstructed = additive.reconstruct_vector(&shares).unwrap();
         assert_eq!(reconstructed.len(), 3);
         for (original, reconstructed) in secrets.iter().zip(reconstructed.iter()) {
             assert_eq!(original.value(), reconstructed.value());
@@ -325,15 +232,15 @@ mod tests {
 
     #[test]
     fn test_share_operations() {
-        let shamir = ShamirSecretSharing::new(2, 3, 7).unwrap();
+        let additive = AdditiveSecretSharing::new(7).unwrap();
         let a = FieldElement::new(3, 7);
         let b = FieldElement::new(4, 7);
         
-        let shares_a = shamir.share_secret(a).unwrap();
-        let shares_b = shamir.share_secret(b).unwrap();
+        let shares_a = additive.share_secret(a).unwrap();
+        let shares_b = additive.share_secret(b).unwrap();
         
-        let sum_shares = shamir.add_shares(&shares_a, &shares_b).unwrap();
-        let sum = shamir.reconstruct_secret(&sum_shares).unwrap();
+        let sum_shares = additive.add_shares(&shares_a, &shares_b).unwrap();
+        let sum = additive.reconstruct_secret(&sum_shares).unwrap();
         
         let expected = a.add(&b).unwrap();
         assert_eq!(sum.value(), expected.value());
@@ -341,16 +248,17 @@ mod tests {
 
     #[test]
     fn test_share_distributor() {
-        let shamir = ShamirSecretSharing::new(2, 3, 7).unwrap();
-        let distributor = ShareDistributor::new(shamir, 3);
+        let additive = AdditiveSecretSharing::new(7).unwrap();
+        let distributor = ShareDistributor::new(additive, 3);
         
         let secret = FieldElement::new(5, 7);
-        let shares = distributor.shamir.share_secret(secret).unwrap();
+        let shares = distributor.additive.share_secret(secret).unwrap();
         
         let distribution = distributor.distribute_shares(shares);
-        assert_eq!(distribution.len(), 3);
+        // With 2 shares and 3 servers, at most 2 non-empty buckets
+        assert_eq!(distribution.len(), 2);
         
         let collected = distributor.collect_shares(&distribution);
-        assert_eq!(collected.len(), 3);
+        assert_eq!(collected.len(), 2);
     }
 } 

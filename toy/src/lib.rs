@@ -9,7 +9,7 @@ pub mod protocol;
 pub mod server;
 
 pub use finite_field::{FieldElement, FiniteField, FieldError};
-pub use secret_sharing::{SecretShare, ShamirSecretSharing, ShareDistributor};
+pub use secret_sharing::{SecretShare, AdditiveSecretSharing, ShareDistributor};
 pub use offline_phase::OfflinePhase;
 pub use online_phase::OnlinePhase;
 pub use protocol::{ProtocolConfig, ProtocolError};
@@ -130,7 +130,7 @@ pub struct ToyProtocol {
     /// Finite field
     field: FiniteField,
     /// Secret sharing scheme
-    secret_sharing: ShamirSecretSharing,
+    secret_sharing: AdditiveSecretSharing,
     /// Offline phase
     offline_phase: OfflinePhase,
     /// Online phase
@@ -143,7 +143,7 @@ impl ToyProtocol {
     /// Create new protocol instance
     pub fn new(config: ToyConfig) -> Result<Self, ProtocolError> {
         let field = FiniteField::new(config.field_modulus)?;
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus)?;
+        let secret_sharing = AdditiveSecretSharing::new(config.field_modulus)?;
         
         let offline_phase = OfflinePhase::new(config.clone(), field.clone(), secret_sharing.clone())?;
         let online_phase = OnlinePhase::new(config.clone(), field.clone(), secret_sharing.clone())?;
@@ -277,13 +277,13 @@ mod tests {
 
     #[test]
     fn test_secret_sharing() {
-        let shamir = ShamirSecretSharing::new(2, 3, 7).unwrap();
+        let additive = AdditiveSecretSharing::new(7).unwrap();
         let secret = FieldElement::new(5, 7);
         
-        let shares = shamir.share_secret(secret).unwrap();
-        assert_eq!(shares.len(), 3);
+        let shares = additive.share_secret(secret).unwrap();
+        assert_eq!(shares.len(), 2);
         
-        let reconstructed = shamir.reconstruct_secret(&shares[0..2]).unwrap();
+        let reconstructed = additive.reconstruct_secret(&shares).unwrap();
         assert_eq!(reconstructed.value(), 5);
     }
 } 

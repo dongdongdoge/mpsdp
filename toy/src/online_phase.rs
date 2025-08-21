@@ -1,5 +1,5 @@
 use crate::finite_field::{FieldElement, FiniteField, FieldError};
-use crate::secret_sharing::{SecretShare, ShamirSecretSharing};
+use crate::secret_sharing::{SecretShare, AdditiveSecretSharing};
 use crate::server::{Server, ServerRole};
 use crate::{UserData, ProtocolError};
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ pub struct OnlinePhase {
     /// Finite field
     field: FiniteField,
     /// Secret sharing scheme
-    secret_sharing: ShamirSecretSharing,
+    secret_sharing: AdditiveSecretSharing,
     /// Field operation counter
     field_operations: usize,
 }
@@ -21,7 +21,7 @@ impl OnlinePhase {
     pub fn new(
         config: crate::ToyConfig,
         field: FiniteField,
-        secret_sharing: ShamirSecretSharing,
+        secret_sharing: AdditiveSecretSharing,
     ) -> Result<Self, ProtocolError> {
         Ok(Self {
             config,
@@ -333,7 +333,7 @@ mod tests {
     async fn test_online_phase_creation() {
         let config = crate::ToyConfig::default();
         let field = FiniteField::new(config.field_modulus).unwrap();
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus).unwrap();
+        let secret_sharing = AdditiveSecretSharing::new(config.field_modulus).unwrap();
         
         let online_phase = OnlinePhase::new(config, field, secret_sharing);
         assert!(online_phase.is_ok());
@@ -343,7 +343,7 @@ mod tests {
     async fn test_user_mask_computation() {
         let config = crate::ToyConfig::default();
         let field = FiniteField::new(config.field_modulus).unwrap();
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus).unwrap();
+        let secret_sharing = AdditiveSecretSharing::new(config.field_modulus).unwrap();
         
         let online_phase = OnlinePhase::new(config, field, secret_sharing).unwrap();
         
@@ -354,18 +354,19 @@ mod tests {
     #[tokio::test]
     async fn test_user_share_computation() {
         let config = crate::ToyConfig::default();
-        let field = FiniteField::new(config.field_modulus).unwrap();
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus).unwrap();
+        let modulus = config.field_modulus;
+        let field = FiniteField::new(modulus).unwrap();
+        let secret_sharing = AdditiveSecretSharing::new(modulus).unwrap();
         
-        let online_phase = OnlinePhase::new(config, field, secret_sharing).unwrap();
+        let mut online_phase = OnlinePhase::new(config, field, secret_sharing).unwrap();
         
         let user_data = vec![
-            FieldElement::new(10, config.field_modulus),
-            FieldElement::new(20, config.field_modulus),
+            FieldElement::new(10, modulus),
+            FieldElement::new(20, modulus),
         ];
         let mask = vec![
-            FieldElement::new(3, config.field_modulus),
-            FieldElement::new(7, config.field_modulus),
+            FieldElement::new(3, modulus),
+            FieldElement::new(7, modulus),
         ];
         
         let share = online_phase.compute_user_share(&user_data, &mask).unwrap();

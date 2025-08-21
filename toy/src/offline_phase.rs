@@ -1,5 +1,5 @@
 use crate::finite_field::{FieldElement, FiniteField, FieldError};
-use crate::secret_sharing::{SecretShare, ShamirSecretSharing, ShareDistributor};
+use crate::secret_sharing::{SecretShare, AdditiveSecretSharing, ShareDistributor};
 use crate::server::{Server, ServerRole};
 use crate::{ToyConfig, ProtocolError};
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ pub struct OfflinePhase {
     /// Finite field
     field: FiniteField,
     /// Secret sharing scheme
-    secret_sharing: ShamirSecretSharing,
+    secret_sharing: AdditiveSecretSharing,
     /// Share distributor
     distributor: ShareDistributor,
 }
@@ -22,7 +22,7 @@ impl OfflinePhase {
     pub fn new(
         config: ToyConfig,
         field: FiniteField,
-        secret_sharing: ShamirSecretSharing,
+        secret_sharing: AdditiveSecretSharing,
     ) -> Result<Self, ProtocolError> {
         let distributor = ShareDistributor::new(secret_sharing.clone(), 3);
 
@@ -250,7 +250,7 @@ mod tests {
     async fn test_offline_phase_creation() {
         let config = ToyConfig::default();
         let field = FiniteField::new(config.field_modulus).unwrap();
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus).unwrap();
+        let secret_sharing = AdditiveSecretSharing::new(config.field_modulus).unwrap();
         
         let offline_phase = OfflinePhase::new(config, field, secret_sharing);
         assert!(offline_phase.is_ok());
@@ -260,7 +260,7 @@ mod tests {
     async fn test_permutation_generation() {
         let config = ToyConfig { num_users: 10, ..Default::default() };
         let field = FiniteField::new(config.field_modulus).unwrap();
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus).unwrap();
+        let secret_sharing = AdditiveSecretSharing::new(config.field_modulus).unwrap();
         
         let offline_phase = OfflinePhase::new(config, field, secret_sharing).unwrap();
         
@@ -274,7 +274,7 @@ mod tests {
     async fn test_mask_generation() {
         let config = ToyConfig { num_users: 10, ..Default::default() };
         let field = FiniteField::new(config.field_modulus).unwrap();
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus).unwrap();
+        let secret_sharing = AdditiveSecretSharing::new(config.field_modulus).unwrap();
         
         let offline_phase = OfflinePhase::new(config, field, secret_sharing).unwrap();
         
@@ -288,7 +288,7 @@ mod tests {
     async fn test_noise_generation() {
         let config = ToyConfig { num_users: 10, ..Default::default() };
         let field = FiniteField::new(config.field_modulus).unwrap();
-        let secret_sharing = ShamirSecretSharing::new(2, 3, config.field_modulus).unwrap();
+        let secret_sharing = AdditiveSecretSharing::new(config.field_modulus).unwrap();
         
         let offline_phase = OfflinePhase::new(config, field, secret_sharing).unwrap();
         
