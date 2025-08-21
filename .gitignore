@@ -1,0 +1,13 @@
+# OS
+.DS_Store
+
+# Build
+/target/
+/toy/target/
+
+# Large datasets (do not commit)
+eval/utility/*.csv
+
+# Generated analysis artifacts
+eval/**/*.png
+eval/*results.json
