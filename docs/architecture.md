@@ -2,89 +2,94 @@
 
 ## System Overview
 
-Doppio is designed as a modular framework for privacy-preserving data processing. The system architecture follows a client-server model with differential privacy guarantees at both ends.
+Doppio is designed as a modular framework for privacy-preserving data processing. The system follows a three-tier architecture where a dedicated shuffler service acts as an intermediary between data producers and the analysis server.
 
 ## Core Components
 
-### 1. Client-Server Architecture
+### 1. Client–Shuffler–Server Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐
-│   Client    │     │   Server    │
-├─────────────┤     ├─────────────┤
-│  - Shuffler │     │  - Shuffler │
-│  - DP       │     │  - DP       │
-│  - Query    │     │  - Query    │
-└──────┬──────┘     └──────┬──────┘
-       │                   │
-       └──────────┬────────┘
-                  │
-           ┌──────┴──────┐
-           │  Network    │
-           └─────────────┘
+┌─────────────┐     ┌─────────────────┐     ┌──────────────────┐
+│   Clients   │────▶│    Shuffler     │────▶│  Analyzer/Server │
+│ (SDK/Apps)  │     │ (Middle Server) │     │  (Aggregation)   │
+└─────────────┘     └─────────────────┘     └──────────────────┘
+        │                    │                         │
+        │  TLS + encoding    │  Batch + permute + DP   │  Aggregate + results
+        ▼                    ▼                         ▼
 ```
 
 ### 2. Privacy Layers
 
-The system implements multiple layers of privacy protection:
+The system implements multiple layers of privacy protection that compose:
 
-1. **Shuffle Privacy (Client-side)**
-   - Data shuffling
-   - Shuffle differential privacy
-   - Input validation
+1. **Anonymity via Shuffler (Middle tier)**
+   - Removes linkability by batching and random permutation
+   - Strips metadata and enforces per-batch limits
+   - Optional thresholding before release
 
-2. **Global Privacy (Server-side)**
-   - Global differential privacy
-   - Privacy budget management
-   - Noise addition
+2. **Differential Privacy (Shuffler)**
+   - Privacy budget management and accounting at the shuffler
+   - DP mechanisms (e.g., Laplace, kRR) applied before release
+   - Composition-aware report processing
+
+3. **Optional Local Randomization (Client SDK)**
+   - Lightweight local protections when required by policy
+   - Report encoding and validation
 
 ### 3. Data Flow
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Raw Data   │     │  Shuffled   │     │  Processed  │
-│  (Client)   │────▶│   Data      │────▶│   Data      │
-└─────────────┘     └─────────────┘     └─────────────┘
-                          │                   │
-                          ▼                   ▼
-                    ┌─────────────┐     ┌─────────────┐
-                    │  Privacy    │     │  Query      │
-                    │  Budget     │     │  Results    │
-                    └─────────────┘     └─────────────┘
+┌─────────────┐   encode+TLS   ┌─────────────────┐   batch+permute+DP  ┌──────────────────┐
+│   Clients   │ ─────────────▶ │    Shuffler     │ ───────────────────▶ │  Analyzer/Server │
+└─────────────┘                 └─────────────────┘                      └──────────────────┘
+       │                               │                                        │
+       ▼                               ▼                                        ▼
+  Reports (encoded)         Privatized reports (shuffled+noised)         Aggregated results
 ```
 
 ## Module Design
 
-### 1. Client Module
+### 1. Client SDK
 
-The client module is responsible for:
-- Data submission with shuffle privacy guarantees
-- Query execution with privacy budget management
-- Shuffle data processing and validation
-
-Key components:
-- `Shuffler`: Implements shuffle data shuffling
-- `DPMechanism`: Applies shuffle differential privacy
-- `Query`: Handles query construction and execution
-
-### 2. Server Module
-
-The server module handles:
-- Global data processing
-- Privacy budget management
-- Query execution with global privacy guarantees
+Responsibilities:
+- Report encoding and schema validation
+- Optional local randomization (policy-dependent)
+- Submission over secure channels to the shuffler
 
 Key components:
-- `Shuffler`: Implements global data shuffling
-- `DPMechanism`: Applies global differential privacy
-- `QueryProcessor`: Executes queries with privacy guarantees
+- `Report`: Client-side data container and validator
+- `Schema`: Input contract
+
+### 2. Shuffler Service (Middle Server)
+
+Responsibilities:
+- Batching, random permutation, and metadata stripping
+- Rate limiting and per-user caps
+- Privacy budget accounting and DP noise addition
+- Optional thresholding and integrity checks
+
+Key components:
+- `Shuffler`: Main shuffling implementation
+- `ShuffleConfig`: Configuration management
+- `ShuffleMechanism`: Algorithm-specific shuffling
+
+### 3. Analyzer Server
+
+Responsibilities:
+- Aggregation over already-privatized inputs
+- Query orchestration and result serving
+- Optional post-processing and caching
+
+Key components:
+- `QueryProcessor`: Executes queries over privatized inputs
+- `ResultStore`: Optional caching and post-processing
 
 ### 3. Differential Privacy Module
 
 The DP module provides:
 - Multiple privacy mechanisms (Laplace, Gaussian, Exponential)
 - Privacy budget tracking
-- Noise generation and addition
+- Noise generation and addition (used by the shuffler in deployment)
 
 Key components:
 - `DPMechanism`: Base mechanism implementation
@@ -93,10 +98,10 @@ Key components:
 
 ### 4. Shuffle Module
 
-The shuffle module implements:
+The shuffle module is the core of the middle-tier shuffler service and implements:
 - Secure data shuffling
-- Batch processing
-- Multiple shuffle rounds
+- Batch processing and multi-round shuffles
+- Service-facing configuration and instrumentation
 
 Key components:
 - `Shuffler`: Main shuffling implementation
@@ -107,10 +112,10 @@ Key components:
 
 ### 1. Privacy Guarantees
 
-- Shuffle differential privacy at the client
-- Global differential privacy at the server
-- Composition of privacy mechanisms
-- Privacy budget management
+- Anonymity via shuffling in the middle tier
+- Differential privacy applied at the shuffler prior to release
+- Composition of privacy mechanisms and proper accounting
+- Privacy budget management at the shuffler
 
 ### 2. Data Protection
 

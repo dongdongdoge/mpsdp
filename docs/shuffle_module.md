@@ -1,24 +1,8 @@
-# Shuffle Module Documentation
-
-## Overview
-
-The shuffle module provides a comprehensive implementation of shuffle differential privacy, offering better privacy-utility trade-offs compared to local differential privacy. The module is designed to be modular, extensible, and easy to use.
-
-## Key Features
-
-- **Multiple Shuffle Algorithms**: Fisher-Yates, Knuth, Cryptographic, and Deterministic shuffling
-- **Flexible Configuration**: Builder pattern for easy configuration setup
-- **Comprehensive Error Handling**: Detailed error types with recovery information
-- **Privacy Guarantees**: Built-in differential privacy with noise addition
-- **Query Processing**: Support for various query types (Mean, Variance, Histogram, Range)
-- **Schema Validation**: Optional schema-based data validation
-- **Performance Monitoring**: Built-in statistics and timing information
-
 ## Architecture
 
 ### Core Components
 
-1. **Shuffler**: Main orchestrator for shuffle operations
+1. **Shuffler**: Main orchestrator for shuffle operations and DP noise addition in the middle-tier service
 2. **ShuffleMechanism**: Implements different shuffle algorithms
 3. **ShuffleConfig**: Configuration management with builder pattern
 4. **ShuffleError**: Comprehensive error handling
@@ -43,7 +27,7 @@ src/shuffle/
 use doppio::shuffle::{Shuffler, ShuffleConfig};
 use doppio::schema::{DataPoint, Query, QueryType};
 
-// Create a default shuffler
+// Create a default shuffler (middle-tier service component)
 let mut shuffler = Shuffler::new_default();
 
 // Create sample data
@@ -53,7 +37,7 @@ let data = vec![
     DataPoint::new(vec![5.0, 6.0]),
 ];
 
-// Shuffle the data
+// Shuffle the data (performed by the shuffler service)
 match shuffler.shuffle_data(data) {
     Ok(shuffled) => println!("Shuffled {} data points", shuffled.len()),
     Err(e) => println!("Shuffle failed: {}", e),
@@ -73,7 +57,7 @@ let schema = Schema(vec![
     ("feature2".to_string(), AttributeType::N8(255)),
 ]);
 
-// Build custom configuration
+// Build custom configuration for the shuffler service (includes DP budget)
 let config = ShuffleConfig::builder()
     .schema(schema)
     .shuffle_rounds(5)
@@ -99,7 +83,7 @@ let data = vec![
     DataPoint::new(vec![5.0, 6.0]),
 ];
 
-// Process different query types
+// Process different query types (after shuffling, on the analyzer server)
 let queries = vec![
     Query::new(QueryType::Mean, vec!["feature1".to_string()]),
     Query::new(QueryType::Variance, vec!["feature1".to_string()]),
@@ -157,7 +141,7 @@ for algorithm in algorithms {
 
 ### Privacy Budget
 
-The privacy budget controls the trade-off between privacy and utility:
+The privacy budget controls the trade-off between privacy and utility and is enforced at the shuffler:
 
 - **Epsilon (ε)**: Controls the privacy level (lower = more private)
 - **Delta (δ)**: Controls the probability of privacy failure
@@ -257,15 +241,15 @@ cargo test -- --nocapture
 
 ## Best Practices
 
-1. **Privacy Budget Management**: Start with conservative privacy budgets and adjust based on utility requirements.
+1. **Privacy Budget Management (Shuffler)**: Enforce conservative privacy budgets at the shuffler; tune based on utility requirements.
 
-2. **Schema Validation**: Use schema validation when possible to catch data format issues early.
+2. **Schema Validation (Client SDK)**: Validate inputs early to catch data format issues before they reach the shuffler.
 
-3. **Error Handling**: Always handle errors appropriately, especially privacy-related errors.
+3. **Error Handling**: Handle errors appropriately at each tier; ensure shuffler never leaks metadata through errors.
 
-4. **Performance Monitoring**: Monitor processing times and memory usage for large datasets.
+4. **Performance Monitoring (Shuffler)**: Monitor batching latency, batch sizes, and permutation throughput.
 
-5. **Deterministic Testing**: Use deterministic shuffling for reproducible tests.
+5. **Deterministic Testing**: Use deterministic shuffling for reproducible tests in CI only; avoid in production.
 
 ## Advanced Usage
 
@@ -287,17 +271,16 @@ The shuffle module integrates with other modules in the framework:
 
 ```rust
 use doppio::shuffle::Shuffler;
-use doppio::dp::DPMechanism;
 use doppio::client::Client;
 
-// Use shuffle in client operations
+// Client submits reports to shuffler; analyzer aggregates privatized inputs
 let mut client = Client::new();
 let mut shuffler = Shuffler::new_default();
 
-// Combine shuffle with differential privacy
+// Shuffler applies shuffle + DP; analyzer aggregates
 let data = vec![/* your data */];
 let shuffled = shuffler.shuffle_data(data)?;
-let result = client.process_data(shuffled)?;
+// send to analyzer for aggregation
 ```
 
 ## Troubleshooting
@@ -306,11 +289,11 @@ let result = client.process_data(shuffled)?;
 
 1. **Empty Input Error**: Ensure data is not empty before shuffling.
 
-2. **Schema Mismatch**: Verify that data conforms to the specified schema.
+2. **Schema Mismatch**: Verify that data conforms to the specified schema at the client before submission.
 
 3. **Privacy Budget Exceeded**: Reduce the number of operations or increase the privacy budget.
 
-4. **Performance Issues**: Consider using batch processing or parallel processing.
+4. **Performance Issues**: Tune batch sizes and enable parallel processing in the shuffler.
 
 ### Debugging
 
