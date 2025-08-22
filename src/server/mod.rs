@@ -1,15 +1,6 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT license.
-
-mod histogram;
-mod ot;
-mod role;
-mod server;
-
 use crate::schema::{DataPoint, Query, QueryResult};
-use crate::shuffle::{Shuffler, ShuffleConfig};
-use crate::dp::{DPMechanism, DPConfig, MechanismType};
-use crate::arith::PrivacyBudget;
+use crate::shuffle::Shuffler;
+use crate::dp::DPMechanism;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -29,17 +20,17 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Self {
-        let shuffle_config = ShuffleConfig::default();
-        let dp_config = DPConfig::default();
+        let shuffler = Shuffler::new_default();
+        let dp_mechanism = DPMechanism::new(Default::default());
         
         Self {
-            shuffler: Shuffler::new(shuffle_config),
-            dp_mechanism: DPMechanism::new(dp_config),
+            shuffler,
+            dp_mechanism,
         }
     }
 
     pub async fn start(&self) {
-        // Server initialization and startup logic
+        // Server startup logic
     }
 
     pub fn process_data(&mut self, data: Vec<DataPoint>) -> Result<Vec<DataPoint>, ServerError> {
@@ -52,10 +43,6 @@ impl Server {
             .map_err(|_| ServerError::QueryProcessingFailed)
     }
 }
-
-pub use histogram::Histogram;
-pub use role::Role;
-pub use server::SummationModulus;
 
 #[cfg(test)]
 mod tests {

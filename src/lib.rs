@@ -6,15 +6,8 @@
 pub mod arith;
 pub mod client;
 pub mod dp;
-pub mod multi_party;
+pub mod example;
 pub mod random;
-pub mod report;
 pub mod schema;
 pub mod server;
 pub mod shuffle;
-
-pub use random::hist_noise;
-pub use report::report::Report;
-pub use report::report_vector::test_distr;
-pub use report::report_vector::ReportVector;
-pub use schema::Schema;

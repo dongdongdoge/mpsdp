@@ -1,5 +1,4 @@
-use crate::schema::{DataPoint, Query, QueryResult};
-use crate::arith::PrivacyBudget;
+use crate::schema::{DataPoint, Query, QueryResult, QueryType};
 use crate::random;
 use super::{DPConfig, DPError, MechanismType};
 
@@ -17,10 +16,8 @@ impl DPMechanismImpl {
             return Err(DPError::InvalidInput);
         }
 
-        // Calculate raw result
         let raw_result = self.compute_raw_result(&data, &query)?;
         
-        // Add noise based on mechanism type
         let noisy_result = match self.mechanism_type {
             MechanismType::Laplace => self.add_laplace_noise(raw_result, config),
             MechanismType::Gaussian => self.add_gaussian_noise(raw_result, config),
@@ -32,16 +29,16 @@ impl DPMechanismImpl {
 
     pub fn get_sensitivity(&self, query: &Query) -> f64 {
         match query.query_type {
-            crate::schema::QueryType::Mean => 1.0,
-            crate::schema::QueryType::Histogram => 1.0,
+            QueryType::Mean => 1.0,
+            QueryType::Histogram => 1.0,
             _ => 0.0,
         }
     }
 
     fn compute_raw_result(&self, data: &[DataPoint], query: &Query) -> Result<QueryResult, DPError> {
         match query.query_type {
-            crate::schema::QueryType::Mean => self.compute_mean(data, query),
-            crate::schema::QueryType::Histogram => self.compute_histogram(data, query),
+            QueryType::Mean => self.compute_mean(data, query),
+            QueryType::Histogram => self.compute_histogram(data, query),
             _ => Err(DPError::InvalidInput),
         }
     }
@@ -73,7 +70,8 @@ impl DPMechanismImpl {
         for point in data {
             for feature in &query.features {
                 if let Some(value) = point.get_feature(feature) {
-                    *histogram.entry(value).or_insert(0) += 1;
+                    let key = (value * 100.0) as i64; // Convert to integer for histogram
+                    *histogram.entry(key).or_insert(0) += 1;
                 }
             }
         }
@@ -83,35 +81,35 @@ impl DPMechanismImpl {
     }
 
     fn add_laplace_noise(&self, mut result: QueryResult, config: &DPConfig) -> QueryResult {
-        let sensitivity = self.get_sensitivity(&result.query);
-        let scale = sensitivity / config.privacy_budget.epsilon();
+        let scale = 1.0 / config.privacy_budget.epsilon();
         
         for value in result.values_mut() {
             *value += random::laplace_noise(scale);
         }
 
+        result.mark_as_noisy();
         result
     }
 
     fn add_gaussian_noise(&self, mut result: QueryResult, config: &DPConfig) -> QueryResult {
-        let sensitivity = self.get_sensitivity(&result.query);
-        let sigma = sensitivity * (2.0 * config.privacy_budget.delta().ln()).sqrt() / config.privacy_budget.epsilon();
+        let sigma = (2.0 * config.privacy_budget.delta().ln()).sqrt() / config.privacy_budget.epsilon();
         
         for value in result.values_mut() {
             *value += random::gaussian_noise(sigma);
         }
 
+        result.mark_as_noisy();
         result
     }
 
     fn add_exponential_noise(&self, mut result: QueryResult, config: &DPConfig) -> QueryResult {
-        let sensitivity = self.get_sensitivity(&result.query);
-        let scale = sensitivity / config.privacy_budget.epsilon();
+        let scale = 1.0 / config.privacy_budget.epsilon();
         
         for value in result.values_mut() {
             *value += random::exponential_noise(scale);
         }
 
+        result.mark_as_noisy();
         result
     }
 }
@@ -119,7 +117,6 @@ impl DPMechanismImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::QueryType;
 
     #[test]
     fn test_laplace_mechanism() {

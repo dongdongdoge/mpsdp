@@ -1,4 +1,4 @@
-use crate::schema::{DataPoint, Query, QueryResult};
+use crate::schema::{DataPoint, Query, QueryResult, QueryType};
 use crate::arith::PrivacyBudget;
 use crate::random;
 use super::ShuffleError;
@@ -18,7 +18,7 @@ impl ShuffleMechanism {
 
     pub fn shuffle(&mut self, mut data: Vec<DataPoint>, rounds: usize) -> Result<Vec<DataPoint>, ShuffleError> {
         if data.is_empty() {
-            return Err(ShuffleError::InvalidInput);
+            return Err(ShuffleError::invalid_input("Data is empty"));
         }
 
         for _ in 0..rounds {
@@ -30,21 +30,18 @@ impl ShuffleMechanism {
 
     pub fn process_query(&self, query: Query, data: Vec<DataPoint>, config: &super::ShuffleConfig) -> Result<QueryResult, ShuffleError> {
         if data.is_empty() {
-            return Err(ShuffleError::InvalidInput);
+            return Err(ShuffleError::invalid_input("Data is empty"));
         }
 
-        // Apply shuffle
         let mut shuffled_data = data;
-        shuffled_data.shuffle(&mut self.rng);
+        shuffled_data.shuffle(&mut thread_rng());
 
-        // Process query based on type
         let result = match query.query_type {
-            crate::schema::QueryType::Mean => self.process_mean_query(&shuffled_data, &query),
-            crate::schema::QueryType::Histogram => self.process_histogram_query(&shuffled_data, &query),
-            _ => return Err(ShuffleError::InvalidInput),
+            QueryType::Mean => self.process_mean_query(&shuffled_data, &query),
+            QueryType::Histogram => self.process_histogram_query(&shuffled_data, &query),
+            _ => return Err(ShuffleError::invalid_input("Unsupported query type")),
         };
 
-        // Add noise based on privacy budget
         let noisy_result = self.add_noise(result, &config.privacy_budget)?;
         Ok(noisy_result)
     }
@@ -76,7 +73,8 @@ impl ShuffleMechanism {
         for point in data {
             for feature in &query.features {
                 if let Some(value) = point.get_feature(feature) {
-                    *histogram.entry(value).or_insert(0) += 1;
+                    let key = (value * 100.0) as i64; // Convert to integer for histogram
+                    *histogram.entry(key).or_insert(0) += 1;
                 }
             }
         }
@@ -92,6 +90,7 @@ impl ShuffleMechanism {
             *value += random::laplace_noise(scale);
         }
 
+        result.mark_as_noisy();
         Ok(result)
     }
 }
@@ -99,7 +98,6 @@ impl ShuffleMechanism {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::QueryType;
 
     #[test]
     fn test_shuffle_mechanism() {

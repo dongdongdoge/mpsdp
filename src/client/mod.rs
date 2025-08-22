@@ -1,10 +1,6 @@
-mod report;
-mod query;
-
 use crate::schema::{DataPoint, Query, QueryResult};
-use crate::shuffle::{Shuffler, ShuffleConfig};
-use crate::dp::{DPMechanism, DPConfig, MechanismType};
-use crate::arith::PrivacyBudget;
+use crate::shuffle::{Shuffler, ShuffleError};
+use crate::dp::{DPMechanism, DPError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -17,6 +13,18 @@ pub enum ClientError {
     QueryExecutionFailed,
 }
 
+impl From<ShuffleError> for ClientError {
+    fn from(_: ShuffleError) -> Self {
+        ClientError::QueryExecutionFailed
+    }
+}
+
+impl From<DPError> for ClientError {
+    fn from(_: DPError) -> Self {
+        ClientError::QueryExecutionFailed
+    }
+}
+
 pub struct Client {
     shuffler: Shuffler,
     dp_mechanism: DPMechanism,
@@ -24,24 +32,22 @@ pub struct Client {
 
 impl Client {
     pub fn new() -> Self {
-        let shuffle_config = ShuffleConfig::default();
-        let dp_config = DPConfig::default();
+        let shuffler = Shuffler::new_default();
+        let dp_mechanism = DPMechanism::new(Default::default());
         
         Self {
-            shuffler: Shuffler::new(shuffle_config),
-            dp_mechanism: DPMechanism::new(dp_config),
+            shuffler,
+            dp_mechanism,
         }
     }
 
     pub fn submit_data(&mut self, data: DataPoint) -> Result<(), ClientError> {
-        // Apply shuffle privacy guarantees
-        let mut data_vec = vec![data];
+        let data_vec = vec![data];
         self.shuffler.shuffle_data(data_vec)?;
         Ok(())
     }
 
     pub fn execute_query(&self, query: Query) -> Result<QueryResult, ClientError> {
-        // Process query with DP guarantees
         self.dp_mechanism.apply_mechanism(vec![], query)
             .map_err(|_| ClientError::QueryExecutionFailed)
     }

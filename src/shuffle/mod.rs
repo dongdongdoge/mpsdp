@@ -8,17 +8,14 @@ pub use types::{ShuffleData, ShuffleResult};
 pub use error::ShuffleError;
 pub use mechanism::ShuffleMechanism;
 
-use crate::arith::PrivacyBudget;
 use crate::schema::{DataPoint, Query, QueryResult};
 
-/// Main shuffler that orchestrates the shuffle differential privacy process
 pub struct Shuffler {
     config: ShuffleConfig,
     mechanism: ShuffleMechanism,
 }
 
 impl Shuffler {
-    /// Create a new shuffler with the given configuration
     pub fn new(config: ShuffleConfig) -> Self {
         Self {
             mechanism: ShuffleMechanism::new(),
@@ -26,83 +23,43 @@ impl Shuffler {
         }
     }
 
-    /// Create a new shuffler with default configuration
     pub fn new_default() -> Self {
         Self::new(ShuffleConfig::default())
     }
 
-    /// Shuffle data with privacy guarantees
     pub fn shuffle_data(&mut self, data: Vec<DataPoint>) -> Result<Vec<DataPoint>, ShuffleError> {
         if data.is_empty() {
             return Err(ShuffleError::EmptyInput);
         }
 
-        // Validate data against schema if provided
-        if let Some(schema) = &self.config.schema {
-            self.validate_data_against_schema(&data, schema)?;
-        }
-
-        // Apply shuffle mechanism
         let shuffled_data = self.mechanism.shuffle(
             data, 
-            self.config.shuffle_rounds,
-            &self.config.privacy_budget
+            self.config.shuffle_rounds
         )?;
 
         Ok(shuffled_data)
     }
 
-    /// Process a query with shuffle differential privacy
     pub fn process_query(&self, query: Query, data: Vec<DataPoint>) -> Result<QueryResult, ShuffleError> {
         if data.is_empty() {
             return Err(ShuffleError::EmptyInput);
         }
 
-        // Validate query
         self.validate_query(&query)?;
-
-        // Process query with shuffle mechanism
         self.mechanism.process_query(query, data, &self.config)
     }
 
-    /// Get the current configuration
     pub fn config(&self) -> &ShuffleConfig {
         &self.config
     }
 
-    /// Update the configuration
     pub fn update_config(&mut self, config: ShuffleConfig) {
         self.config = config;
     }
 
-    /// Validate data against schema
-    fn validate_data_against_schema(&self, data: &[DataPoint], schema: &crate::schema::Schema) -> Result<(), ShuffleError> {
-        for (i, point) in data.iter().enumerate() {
-            if !schema.is_compatible_attr_array(&point.attributes()) {
-                return Err(ShuffleError::SchemaMismatch {
-                    data_index: i,
-                    message: "Data point incompatible with schema".to_string(),
-                });
-            }
-        }
-        Ok(())
-    }
-
-    /// Validate query parameters
     fn validate_query(&self, query: &Query) -> Result<(), ShuffleError> {
         if query.features.is_empty() {
             return Err(ShuffleError::InvalidQuery("No features specified".to_string()));
-        }
-
-        // Check if features exist in schema if schema is provided
-        if let Some(schema) = &self.config.schema {
-            for feature in &query.features {
-                if schema.get_attr_index(feature).is_none() {
-                    return Err(ShuffleError::InvalidQuery(
-                        format!("Feature '{}' not found in schema", feature)
-                    ));
-                }
-            }
         }
 
         Ok(())
@@ -175,8 +132,8 @@ mod tests {
     #[test]
     fn test_shuffle_with_schema() {
         let schema = Schema(vec![
-            ("feature1".to_string(), AttributeType::C4),
-            ("feature2".to_string(), AttributeType::N8(255)),
+            ("feature1".to_string(), AttributeType::Categorical(4)),
+            ("feature2".to_string(), AttributeType::Numerical(255)),
         ]);
         
         let config = ShuffleConfig::builder()
